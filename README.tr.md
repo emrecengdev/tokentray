@@ -225,4 +225,3 @@ TokenTray seni sürpriz bir limitten kurtardıysa bir ⭐ başkalarının da bul
 ## Lisans
 
 [MIT](LICENSE) © Emre Canik. Ürün adları sahiplerine aittir.
-Esin kaynağı: [CodeZeno/Claude-Code-Usage-Monitor](https://github.com/CodeZeno/Claude-Code-Usage-Monitor).

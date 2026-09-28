@@ -226,4 +226,3 @@ If TokenTray saved you from a surprise limit, a ⭐ helps other people find it.
 ## License
 
 [MIT](LICENSE) © Emre Canik. Product names belong to their owners.
-Inspired by [CodeZeno/Claude-Code-Usage-Monitor](https://github.com/CodeZeno/Claude-Code-Usage-Monitor).
