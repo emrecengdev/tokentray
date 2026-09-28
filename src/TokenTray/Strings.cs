@@ -160,6 +160,23 @@ internal static class S
             "Limitlerin saatin yanında. Detay için üzerine gel, fazlası için tıkla. Tepsi simgesi ^ altında kalırsa görev çubuğuna sürükle.")
         : T("Click the tray icon for your limits. If it hides under ^, drag it onto the taskbar.",
             "Limitlerin için tepsi simgesine tıkla. Simge ^ altında kalırsa görev çubuğuna sürükle.");
+    public static string BannerTagline => T("Your AI coding limits, right next to the clock. Session and weekly usage, exact reset times, and a warning before you run out.",
+        "AI kodlama limitlerin, saatin hemen yanında. Oturum ve haftalık kullanım, tam yenilenme saatleri ve bitmeden önce uyarı.");
+    public static (string, string)[] PaceGuideRows => Tr
+        ?
+        [
+            ("Tempo rahat", "Hakkın zamandan yavaş gidiyor; bol bol yeter."),
+            ("Tempoda", "Harcaman geçen zamana denk; yenilenmeye yetişirsin."),
+            ("Hızlı gidiyorsun", "Dolgu çentiği geçti; bu tempoyla yenilenmeden biter."),
+        ]
+        :
+        [
+            ("Well under pace", "You're spending slower than time passes. Plenty left."),
+            ("On pace", "Spending matches the clock. You'll make it to the reset."),
+            ("Running hot", "The fill passed the notch. At this rate it runs out first."),
+        ];
+    public static string PaceGuideCaption => T("The notch marks how much of the window has passed. Keep the fill behind it.",
+        "Çentik pencerenin ne kadarının geçtiğini gösterir. Dolguyu onun gerisinde tut.");
     public static string VariantName => T("Name", "İsimli");
     public static string VariantIcon => T("Icon", "İkonlu");
     public static string EmailLabel => T("Show account emails", "Hesap e-postalarını göster");

@@ -88,11 +88,30 @@ internal static class MediaRenderer
             flyout.Close();
         }
 
-        // Hover card
-        Palette.UiOverride = true;
-        var card = new HoverCard();
-        Save(card.RenderForMedia(three, false, Scale), Path.Combine(dir, "hover.png"));
-        card.Close();
+        // Provider marks for tables, in each theme's hue.
+        foreach (var dark in new[] { true, false })
+            foreach (var id in Enum.GetValues<ProviderId>())
+            {
+                var mv = new DrawingVisual();
+                using (var dc = mv.RenderOpen())
+                    ProviderMark.Draw(dc, id, new Point(10, 10), 16, Palette.Brush(new Palette(dark).Hue(id)));
+                var bmp = new RenderTargetBitmap(40, 40, 96 * Scale, 96 * Scale, PixelFormats.Pbgra32);
+                bmp.Render(mv);
+                Save(bmp, Path.Combine(dir, $"mark-{id.ToString().ToLowerInvariant()}-{(dark ? "dark" : "light")}.png"));
+            }
+
+        // Hover card, both themes; then the banner and the pace guide built around it.
+        foreach (var dark in new[] { true, false })
+        {
+            Palette.UiOverride = dark;
+            var card = new HoverCard();
+            var hover = card.RenderForMedia(three, false, Scale);
+            card.Close();
+            var theme = dark ? "dark" : "light";
+            Save(hover, Path.Combine(dir, $"hover-{theme}.png"));
+            Save(MediaBanner.Banner(dark, rowsOf(three, rings), hover, S.BannerTagline, ""), Path.Combine(dir, $"banner-{theme}.png"));
+            Save(MediaBanner.PaceGuide(dark, S.PaceGuideRows, S.PaceGuideCaption), Path.Combine(dir, $"pace-{theme}.png"));
+        }
 
         // GIF frames: a Claude session filling up, running out, refilling; then a tour of the styles.
         var n = 0;
