@@ -1,0 +1,9 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+.orkestra/
+.orkestra-wt/
+dist/
+docs/media/**/frames/

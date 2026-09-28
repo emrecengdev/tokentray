@@ -1,0 +1,24 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build packages
+        shell: pwsh
+        run: ./publish.ps1 -Version ("${{ github.ref_name }}".TrimStart("v"))
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create "${{ github.ref_name }}" dist/*.zip dist/SHA256SUMS.txt --title "TokenTray ${{ github.ref_name }}" --generate-notes

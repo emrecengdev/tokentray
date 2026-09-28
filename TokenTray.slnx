@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TokenTray.Core/TokenTray.Core.csproj" />
+    <Project Path="src/TokenTray/TokenTray.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TokenTray.Tests/TokenTray.Tests.csproj" />
+  </Folder>
+</Solution>
