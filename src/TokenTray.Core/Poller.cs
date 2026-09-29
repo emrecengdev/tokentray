@@ -172,14 +172,17 @@ public static class Format
     }
 
     /// <summary>
-    /// When a window refills, as briefly as possible: whole days while it's a day or more away
-    /// ("2" + unit), otherwise the local clock time ("04:00").
+    /// When a window refills, as briefly as possible: whole days while it's a day or more away ("2d"),
+    /// the local clock time within the day ("04:00"), and minutes in the last hour ("40m"), when a
+    /// countdown is more useful than a time of day.
     /// </summary>
-    public static string ResetShort(DateTimeOffset at, DateTimeOffset now, string dayUnit)
+    public static string ResetShort(DateTimeOffset at, DateTimeOffset now, string dayUnit, string minuteUnit = "m")
     {
         var left = at - now;
         if (left <= TimeSpan.Zero) return "…";
         if (left >= TimeSpan.FromDays(1)) return $"{(int)left.TotalDays}{dayUnit}";
+        if (left < TimeSpan.FromHours(1))
+            return left < TimeSpan.FromMinutes(1) ? $"<1{minuteUnit}" : $"{(int)Math.Ceiling(left.TotalMinutes)}{minuteUnit}";
         return Minute(at).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
     }
 

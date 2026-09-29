@@ -25,7 +25,7 @@ ve bitmeden önce haberin olur. Tarayıcı sekmesi yok, `/usage` komutu yok, tel
 ## Bir bakışta gör
 
 Kullandığın her araç görev çubuğunda yer alır: oturum ve haftalık kullanım yan yana, her sayının yanında
-kendi yenilenme zamanı. Bugünse `03:00`, günler sonraysa `2g`. Renkler yalnız dikkat gerektiğinde değişir.
+kendi yenilenme zamanı. Bugünse `03:00`, günler sonraysa `2g`, son bir saatteyse `40dk` geri sayımı. Renkler yalnız dikkat gerektiğinde değişir.
 
 <p align="center">
 <img src="docs/media/tr/demo.gif" width="820" alt="Hareketli TokenTray widget'ı: Claude Code oturumu doluyor, amber sonra kırmızıya dönüyor, yenileniyor, widget beş stil arasında geçiyor">

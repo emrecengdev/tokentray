@@ -256,6 +256,11 @@ public class ResetShortTests
         Assert.Equal("1g", Format.ResetShort(now.AddHours(24), now, "g"));
         Assert.Equal(now.AddHours(4).AddMinutes(30).ToString("HH:mm"), Format.ResetShort(now.AddHours(4).AddMinutes(30), now, "g"));
         Assert.Equal("…", Format.ResetShort(now.AddMinutes(-1), now, "g"));
+        // The last hour counts down in minutes.
+        Assert.Equal("40dk", Format.ResetShort(now.AddMinutes(39).AddSeconds(20), now, "g", "dk"));
+        Assert.Equal("60m", Format.ResetShort(now.AddMinutes(59).AddSeconds(30), now, "d"));
+        Assert.Equal("<1dk", Format.ResetShort(now.AddSeconds(40), now, "g", "dk"));
+        Assert.Equal(now.AddHours(1).ToString("HH:mm"), Format.ResetShort(now.AddHours(1), now, "g", "dk"));
     }
 }
 

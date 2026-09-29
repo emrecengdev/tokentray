@@ -91,7 +91,7 @@ internal static class WidgetRenderer
 
         /// <summary>Beside each number: when that window refills, or which window it is when times are off.</summary>
         string Note(Reading rd) => o.Time && rd.Window.ResetsAt is { } at
-            ? (rd.PastReset ? "…" : Format.ResetShort(at, DateTimeOffset.Now, S.Tr ? "g" : "d"))
+            ? (rd.PastReset ? "…" : Format.ResetShort(at, DateTimeOffset.Now, S.Tr ? "g" : "d", S.Tr ? "dk" : "m"))
             : Tag(rd.Window);
 
         static string Tag(UsageWindow w) => w.Kind switch

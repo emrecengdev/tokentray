@@ -25,7 +25,7 @@ and a heads-up before you run out. No browser tab, no `/usage` command, no telem
 ## See it at a glance
 
 Every tool you use gets a spot on the taskbar: session and weekly usage side by side, each number
-with its own reset — `03:00` when it's today, `2d` when it's days away. Colors only change when
+with its own reset — `03:00` when it's today, `2d` when it's days away, and a `40m` countdown in the last hour. Colors only change when
 something needs your attention.
 
 <p align="center">
