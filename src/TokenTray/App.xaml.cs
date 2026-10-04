@@ -45,6 +45,7 @@ public partial class App : Application
 
         DispatcherUnhandledException += (_, ex) => { Log(ex.Exception); ex.Handled = true; };
         settings = Settings.Load();
+        S.Configure(settings.Language);
         Palette.UiOverride = settings.UiDark;
 
         tray = new TrayIcon();
@@ -151,13 +152,13 @@ public partial class App : Application
             }
             var problem = s.Status switch
             {
-                SnapshotStatus.Loading => S.Tr ? "okunuyor…" : "reading…",
-                SnapshotStatus.NotSignedIn => S.Tr ? "giriş yok" : "not signed in",
-                SnapshotStatus.TokenExpired => S.Tr ? "oturum doldu" : "sign-in expired",
-                SnapshotStatus.Offline => S.Tr ? "bağlantı yok" : "offline",
-                SnapshotStatus.RateLimited when s.RetryAt is { } at && at > now => S.Tr ? $"okuma {S.ShortDuration(at - now)} içinde" : $"reading in {S.ShortDuration(at - now)}",
-                SnapshotStatus.RateLimited => S.Tr ? "okunuyor…" : "reading…",
-                _ => S.Tr ? "okunamadı" : "unavailable",
+                SnapshotStatus.Loading => S.T("reading…", "okunuyor…", "读取中…"),
+                SnapshotStatus.NotSignedIn => S.T("not signed in", "giriş yok", "未登录"),
+                SnapshotStatus.TokenExpired => S.T("sign-in expired", "oturum doldu", "登录已过期"),
+                SnapshotStatus.Offline => S.T("offline", "bağlantı yok", "离线"),
+                SnapshotStatus.RateLimited when s.RetryAt is { } at && at > now => S.T($"reading in {S.ShortDuration(at - now)}", $"okuma {S.ShortDuration(at - now)} içinde", $"{S.ShortDuration(at - now)}后读取"),
+                SnapshotStatus.RateLimited => S.T("reading…", "okunuyor…", "读取中…"),
+                _ => S.T("unavailable", "okunamadı", "不可用"),
             };
             var waiting = s.Status is SnapshotStatus.Loading or SnapshotStatus.RateLimited;
             return new WidgetRenderer.Row(s.Provider, null, null, problem, null, waiting, Name: s.Name);
@@ -183,7 +184,7 @@ public partial class App : Application
         var tip = string.Join("\n", snaps.Select(s => s.Binding is { } b
             ? $"{S.Label(s)}: {S.Percent(settings.ShowRemaining ? b.RemainingPercent : b.UsedPercent)} {(settings.ShowRemaining ? S.Left : S.Used)} · {S.Window(b)}" +
               (b.ResetsAt is { } r && r > now ? $" · {S.ShortDuration(r - now)}" : "") +
-              (IsOld(s, now) ? (S.Tr ? $" (son okuma {S.ShortDuration(now - s.FetchedAt)} önce)" : $" (read {S.ShortDuration(now - s.FetchedAt)} ago)") : "")
+              (IsOld(s, now) ? S.T($" (read {S.ShortDuration(now - s.FetchedAt)} ago)", $" (son okuma {S.ShortDuration(now - s.FetchedAt)} önce)", $"（{S.ShortDuration(now - s.FetchedAt)}前读取）") : "")
             : $"{S.Label(s)}: {S.Status(s)}"));
         if (tip.Length == 0) tip = "TokenTray";
         var shown = tightest.s is null ? (Reading?)null : Reading.Of(tightest.s.Binding!, settings.ShowRemaining, now);

@@ -209,7 +209,7 @@ internal partial class FlyoutWindow : Window
         {
             Page.Children.Add(new TextBlock
             {
-                Text = S.Tr ? "Hiçbir sağlayıcı açık değil. Ayarlar'dan Claude Code ya da Codex'i aç." : "No providers are on. Turn on Claude Code or Codex in Settings.",
+                Text = S.T("No providers are on. Turn on Claude Code or Codex in Settings.", "Hiçbir sağlayıcı açık değil. Ayarlar'dan Claude Code ya da Codex'i aç.", "当前没有启用任何工具。请在设置中打开 Claude Code 或 Codex。"),
                 TextWrapping = TextWrapping.Wrap, Foreground = Palette.Brush(palette.TextMuted), Margin = new Thickness(0, 4, 0, 14),
             });
         }
@@ -539,6 +539,16 @@ internal partial class FlyoutWindow : Window
         }
         Page.Children.Add(themes);
         Page.Children.Add(new TextBlock { Text = S.ThemeHint, FontSize = 12, Foreground = Palette.Brush(palette.TextMuted), Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap });
+        Page.Children.Add(new TextBlock { Text = S.LanguageLabel, Margin = new Thickness(0, 4, 0, 6) });
+        var langs = new WrapPanel { Margin = new Thickness(-2, 0, 0, 2) };
+        foreach (var l in Enum.GetValues<UiLang>())
+        {
+            var rb = new RadioButton { Content = S.LanguageName(l), GroupName = "lang", Style = (Style)Resources["Segment"], IsChecked = settings.Language == l, Margin = new Thickness(0, 0, 4, 4) };
+            rb.Checked += (_, _) => { settings.Language = l; S.Configure(l); settingsChanged(); Dispatcher.BeginInvoke(ShowSettings); };
+            langs.Children.Add(rb);
+        }
+        Page.Children.Add(langs);
+        Page.Children.Add(new TextBlock { Text = S.LanguageHint, FontSize = 12, Foreground = Palette.Brush(palette.TextMuted), Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap });
         Page.Children.Add(Switch(S.EmailLabel, S.EmailHint, settings.ShowEmail, v => settings.ShowEmail = v));
         Page.Children.Add(Switch(S.NotifyLabel, S.NotifyHint, settings.Notifications, v => settings.Notifications = v));
         Page.Children.Add(Switch(S.StartupLabel, null, Settings.StartWithWindows, v => Settings.StartWithWindows = v, persist: false));
