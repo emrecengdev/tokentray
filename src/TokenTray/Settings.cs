@@ -76,6 +76,8 @@ public sealed class Settings
     public int TaskbarOffset { get; set; }
     public bool Notifications { get; set; } = true;
     public AppTheme Theme { get; set; } = AppTheme.System;
+    /// <summary>Interface language. Auto follows the Windows UI culture.</summary>
+    public UiLang Language { get; set; } = UiLang.Auto;
     /// <summary>Show each account's email under the tool's name in the flyout.</summary>
     public bool ShowEmail { get; set; } = true;
 
@@ -140,3 +142,5 @@ public sealed class Settings
 public sealed record ExtraAccount(ProviderId Provider, string Path, string Name);
 
 public enum AppTheme { System, Light, Dark }
+
+public enum UiLang { Auto, English, Turkish, Chinese }

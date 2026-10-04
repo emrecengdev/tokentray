@@ -91,16 +91,18 @@ internal static class WidgetRenderer
 
         /// <summary>Beside each number: when that window refills, or which window it is when times are off.</summary>
         string Note(Reading rd) => o.Time && rd.Window.ResetsAt is { } at
-            ? (rd.PastReset ? "…" : Format.ResetShort(at, DateTimeOffset.Now, S.Tr ? "g" : "d", S.Tr ? "dk" : "m"))
+            ? (rd.PastReset ? "…" : Format.ResetShort(at, DateTimeOffset.Now,
+                S.Zh ? "天" : S.Tr ? "g" : "d", S.Zh ? "分" : S.Tr ? "dk" : "m"))
             : Tag(rd.Window);
 
+        // The taskbar badge is only a few characters wide, so Chinese keeps to single characters.
         static string Tag(UsageWindow w) => w.Kind switch
         {
-            WindowKind.Session when w.Length is { } l => S.Tr ? $"{l.TotalHours:0}sa" : $"{l.TotalHours:0}h",
-            WindowKind.Session => S.Tr ? "oturum" : "session",
-            WindowKind.Period when w.Label is "Monthly" or "This month" => S.Tr ? "ay" : "mo",
-            WindowKind.Period => S.Tr ? "dönem" : "period",
-            _ => S.Tr ? "7g" : "7d",
+            WindowKind.Session when w.Length is { } l => S.T($"{l.TotalHours:0}h", $"{l.TotalHours:0}sa", $"{l.TotalHours:0}时"),
+            WindowKind.Session => S.T("session", "oturum", "时段"),
+            WindowKind.Period when w.Label is "Monthly" or "This month" => S.T("mo", "ay", "月"),
+            WindowKind.Period => S.T("period", "dönem", "账期"),
+            _ => S.T("7d", "7g", "7天"),
         };
 
         public Block Layout(Row r) => r.Session is null && r.Weekly is null
