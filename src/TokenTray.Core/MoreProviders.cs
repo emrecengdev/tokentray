@@ -11,7 +11,9 @@ namespace TokenTray.Core;
 /// ("gemini:antigravity") and refreshes it while it runs. We only read it: an expired
 /// token means "open Antigravity", never a refresh from here.
 /// </summary>
-public sealed class AntigravityProvider(Func<string?>? readCredential = null) : IUsageProvider
+public sealed class AntigravityProvider(
+    Func<string?>? readCredential = null,
+    Func<CancellationToken, Task<AntigravityLocal.Answer?>>? askLocal = null) : IUsageProvider
 {
     const string Target = "gemini:antigravity";
     static readonly string[] Endpoints = ["https://daily-cloudcode-pa.googleapis.com", "https://cloudcode-pa.googleapis.com"];
@@ -42,10 +44,25 @@ public sealed class AntigravityProvider(Func<string?>? readCredential = null) : 
             return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn, "Antigravity's stored sign-in is unreadable. Sign in again in Antigravity.");
         }
 
+        // The Antigravity app, while it runs, answers with exactly what its own usage panel shows,
+        // including pools the cloud endpoints leave out for other clients (Gemini 4 Argon).
+        // Only a reading for the same account is used.
+        if (await (askLocal ?? AntigravityLocal.TryAskAsync)(ct) is { Email: { } localEmail } local
+            && (account is null || string.Equals(localEmail, account, StringComparison.OrdinalIgnoreCase)))
+        {
+            var snap = Parse(local.QuotaJson, DateTimeOffset.Now);
+            if (snap.Status == SnapshotStatus.Ok && snap.Windows.Any(w => w.Group is null))
+            {
+                LastAccount = localEmail;
+                return snap with { Plan = local.Tier, Account = localEmail, Email = localEmail };
+            }
+        }
+
         if (token.Length == 0 || expiry is { } e && e <= DateTimeOffset.UtcNow.AddSeconds(60))
             return ProviderSnapshot.Failed(Id, SnapshotStatus.TokenExpired, "Antigravity's sign-in has expired. Open Antigravity once and it will refresh.") with { Account = account };
 
         var auth = false; var lastError = "Antigravity quota service didn't answer.";
+        ProviderSnapshot? partial = null;
         foreach (var baseUrl in Endpoints)
         {
             var (o1, s1, load) = await Post(baseUrl + "/v1internal:loadCodeAssist", """{"metadata":{"ideType":"ANTIGRAVITY"}}""", token, ct);
@@ -63,8 +80,13 @@ public sealed class AntigravityProvider(Func<string?>? readCredential = null) : 
             var (o2, s2, summary) = await Post(baseUrl + "/v1internal:retrieveUserQuotaSummary", JsonSerializer.Serialize(new { project }), token, ct);
             if (o2 == Http.Outcome.Auth) { auth = true; continue; }
             if (o2 != Http.Outcome.Ok) { lastError = $"Antigravity quota summary returned {s2}."; continue; }
-            return Parse(summary, DateTimeOffset.Now) with { Plan = plan, Account = account, Email = account };
+            var snap = Parse(summary, DateTimeOffset.Now) with { Plan = plan, Account = account, Email = account };
+            // An endpoint can answer without the Gemini group (daily-cloudcode-pa does for clients it
+            // doesn't recognise); ask the next one before settling for the other pools alone.
+            if (snap.Status == SnapshotStatus.Ok && snap.Windows.Any(w => w.Group is null)) return snap;
+            if (snap.Status == SnapshotStatus.Ok) partial ??= snap;
         }
+        if (partial is not null) return partial;
         return auth
             ? ProviderSnapshot.Failed(Id, SnapshotStatus.TokenExpired, "Antigravity rejected the sign-in. Open Antigravity once to refresh it.") with { Account = account }
             : ProviderSnapshot.Failed(Id, SnapshotStatus.Error, lastError) with { Account = account };
@@ -77,37 +99,47 @@ public sealed class AntigravityProvider(Func<string?>? readCredential = null) : 
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        req.Headers.UserAgent.ParseAdd("antigravity");
+        // daily-cloudcode-pa gates the Gemini group on an IDE version and the Argon group on a current build cl.
+        req.Headers.UserAgent.ParseAdd("antigravity/2.24.0 (aidev_client; cl=999999999)");
         return await Http.Send(req, ct);
     }
 
     /// <summary>
     /// Groups share a five-hour and a weekly limit. The Gemini group is the main allowance;
-    /// others (Claude and GPT models) become secondary pools.
+    /// others (Claude and GPT models) become secondary pools. Gemini 4 Argon has its own quota
+    /// (weekly only on AI Pro, weekly and five-hour on Ultra) that never counts against the main
+    /// allowance, so it is always its own "Argon" pool, whether it comes as a group or as buckets
+    /// inside the Gemini group.
     /// </summary>
     public static ProviderSnapshot Parse(string json, DateTimeOffset now)
     {
         using var doc = JsonDocument.Parse(json);
         var windows = new List<UsageWindow>();
-        if (doc.RootElement.TryGetProperty("groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+        // The local language server wraps the cloud answer: {"response":{"groups":[...]}}.
+        var root = doc.RootElement.TryGetProperty("response", out var inner) && inner.ValueKind == JsonValueKind.Object ? inner : doc.RootElement;
+        if (root.TryGetProperty("groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
         {
             var list = groups.EnumerateArray().ToList();
-            var main = list.FindIndex(IsGemini);
-            if (main < 0) main = 0;
+            // Only the Gemini group is the main allowance. Without it every group keeps its name,
+            // so the Claude and GPT pool is never shown as if it were Gemini's.
+            var main = list.FindIndex(g => IsGemini(g) && !IsArgonGroup(g));
             for (var i = 0; i < list.Count; i++)
             {
                 var g = list[i];
-                string? group = i == main ? null : ShortGroup(Http.Str(g, "displayName") ?? $"Group {i + 1}");
+                string? group = IsArgonGroup(g) ? ArgonPool
+                    : i == main ? null
+                    : ShortGroup(Http.Str(g, "displayName") ?? $"Group {i + 1}");
                 if (!g.TryGetProperty("buckets", out var buckets) || buckets.ValueKind != JsonValueKind.Array) continue;
                 foreach (var b in buckets.EnumerateArray())
                 {
                     if (Http.Number(b, "remainingFraction") is not { } rem) continue;
                     var used = Math.Clamp((1 - Math.Clamp(rem, 0, 1)) * 100, 0, 100);
                     var reset = Http.Time(b, "resetTime");
-                    switch (Http.Str(b, "window")?.ToLowerInvariant())
+                    var pool = IsArgonBucket(b) ? ArgonPool : group;
+                    switch (WindowOf(b))
                     {
-                        case "5h": windows.Add(new UsageWindow(WindowKind.Session, "5-hour", used, reset, TimeSpan.FromHours(5), group)); break;
-                        case "weekly": windows.Add(new UsageWindow(WindowKind.Weekly, "Weekly", used, reset, TimeSpan.FromDays(7), group)); break;
+                        case WindowKind.Session: windows.Add(new UsageWindow(WindowKind.Session, "5-hour", used, reset, TimeSpan.FromHours(5), pool)); break;
+                        case WindowKind.Weekly: windows.Add(new UsageWindow(WindowKind.Weekly, "Weekly", used, reset, TimeSpan.FromDays(7), pool)); break;
                     }
                 }
             }
@@ -117,13 +149,181 @@ public sealed class AntigravityProvider(Func<string?>? readCredential = null) : 
             : new ProviderSnapshot(ProviderId.Antigravity, SnapshotStatus.Ok, windows, now);
     }
 
+    const string ArgonPool = "Argon";
+
+    /// <summary>"5h" or "weekly"; the bucket id ("gemini-5h", "argon-weekly") when the window field is missing.</summary>
+    static WindowKind? WindowOf(JsonElement b)
+    {
+        var w = (Http.Str(b, "window") ?? "").ToLowerInvariant().Replace("_", "").Replace("-", "");
+        if (w is "5h" or "5hour" or "fivehour") return WindowKind.Session;
+        if (w is "weekly" or "week" or "7d") return WindowKind.Weekly;
+        if (w.Length > 0) return null;
+        var id = (Http.Str(b, "bucketId") ?? "").ToLowerInvariant();
+        return id.EndsWith("5h") ? WindowKind.Session : id.EndsWith("weekly") ? WindowKind.Weekly : null;
+    }
+
     static bool IsGemini(JsonElement g) =>
         (Http.Str(g, "displayName") ?? "").Contains("gemini", StringComparison.OrdinalIgnoreCase) ||
         (Http.Str(g, "description") ?? "").Contains("gemini", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>A group that holds only Argon: named for it, or every bucket is an Argon bucket.</summary>
+    static bool IsArgonGroup(JsonElement g)
+    {
+        if (Mentions(g, "displayName", "argon")) return true;
+        if (!g.TryGetProperty("buckets", out var buckets) || buckets.ValueKind != JsonValueKind.Array) return false;
+        var list = buckets.EnumerateArray().ToList();
+        return list.Count > 0 && list.All(IsArgonBucket);
+    }
+
+    static bool IsArgonBucket(JsonElement b) =>
+        Mentions(b, "bucketId", "argon") || Mentions(b, "displayName", "argon");
+
+    static bool Mentions(JsonElement e, string prop, string word) =>
+        (Http.Str(e, prop) ?? "").Contains(word, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>"Claude and GPT models" → "Claude and GPT".</summary>
     static string ShortGroup(string name) =>
         System.Text.RegularExpressions.Regex.Replace(name, @"\s*models?$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+}
+
+/// <summary>
+/// The Antigravity app running on this PC. Its language server serves the app's own usage panel
+/// on a random localhost port and only answers with the session key it was started with. We find
+/// both from the running process, ask, and keep neither. Anything unexpected means "not available".
+/// </summary>
+public static class AntigravityLocal
+{
+    public sealed record Answer(string QuotaJson, string? Email, string? Tier);
+
+    const string Service = "/exa.language_server_pb.LanguageServerService/";
+    static readonly HttpClient Local = new(new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(2) })
+    { Timeout = TimeSpan.FromSeconds(10) };
+
+    public static async Task<Answer?> TryAskAsync(CancellationToken ct)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        foreach (var (pid, key) in Servers())
+            foreach (var port in ListeningPorts(pid))
+            {
+                // Without forceRefresh the language server returns its cached reading until the user opens its usage panel.
+                var quota = await Call(port, key, "RetrieveUserQuotaSummary", """{"forceRefresh":true}""", "\"groups\"", ct);
+                if (quota is null) continue;
+                var status = await Call(port, key, "GetUserStatus", "{}", "\"userStatus\"", ct);
+                return new Answer(quota, StatusField(status, "email"), StatusTier(status));
+            }
+        return null;
+    }
+
+    static async Task<string?> Call(int port, string key, string method, string bodyJson, string mustContain, CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}{Service}{method}")
+            { Content = new StringContent(bodyJson, Encoding.UTF8, "application/json") };
+            req.Headers.Add("x-codeium-csrf-token", key);
+            req.Headers.Add("Connect-Protocol-Version", "1");
+            using var res = await Local.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            var body = await res.Content.ReadAsStringAsync(ct);
+            return body.Contains(mustContain, StringComparison.Ordinal) ? body : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { return null; }
+    }
+
+    static string? StatusField(string? status, string field)
+    {
+        if (status is null) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(status);
+            return doc.RootElement.TryGetProperty("userStatus", out var u) ? Http.Str(u, field) : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    static string? StatusTier(string? status)
+    {
+        if (status is null) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(status);
+            return doc.RootElement.TryGetProperty("userStatus", out var u) && u.TryGetProperty("userTier", out var t) && t.ValueKind == JsonValueKind.Object
+                ? Http.Str(t, "name") : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    /// <summary>Antigravity's language servers and the session key each was started with.</summary>
+    static IEnumerable<(int Pid, string Key)> Servers()
+    {
+        foreach (var p in Process.GetProcesses())
+        {
+            using (p)
+            {
+                if (!p.ProcessName.StartsWith("language_server", StringComparison.OrdinalIgnoreCase)) continue;
+                var cmd = CommandLine(p.Id);
+                if (cmd is null || cmd.IndexOf("antigravity", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var m = System.Text.RegularExpressions.Regex.Match(cmd, @"--csrf_token[=\s]+(\S+)");
+                if (m.Success) yield return (p.Id, m.Groups[1].Value);
+            }
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)] struct UNICODE_STRING { public ushort Length, MaximumLength; public IntPtr Buffer; }
+    [DllImport("kernel32", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("ntdll")] static extern int NtQueryInformationProcess(IntPtr h, int infoClass, IntPtr buffer, int length, out int returned);
+    [DllImport("iphlpapi")] static extern uint GetExtendedTcpTable(IntPtr table, ref int size, bool sort, int family, int tableClass, uint reserved);
+
+    /// <summary>Another process's command line (Windows 8.1+), with only query-limited access.</summary>
+    static string? CommandLine(int pid)
+    {
+        const uint QueryLimitedInformation = 0x1000;
+        const int ProcessCommandLineInformation = 60;
+        var h = OpenProcess(QueryLimitedInformation, false, pid);
+        if (h == IntPtr.Zero) return null;
+        try
+        {
+            NtQueryInformationProcess(h, ProcessCommandLineInformation, IntPtr.Zero, 0, out var need);
+            if (need <= 0 || need > 1 << 20) return null;
+            var buf = Marshal.AllocHGlobal(need);
+            try
+            {
+                if (NtQueryInformationProcess(h, ProcessCommandLineInformation, buf, need, out _) != 0) return null;
+                var us = Marshal.PtrToStructure<UNICODE_STRING>(buf);
+                return us.Buffer == IntPtr.Zero ? null : Marshal.PtrToStringUni(us.Buffer, us.Length / 2);
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        finally { CloseHandle(h); }
+    }
+
+    /// <summary>IPv4 ports the process listens on at localhost.</summary>
+    static List<int> ListeningPorts(int pid)
+    {
+        const int AF_INET = 2, TCP_TABLE_OWNER_PID_LISTENER = 3;
+        var ports = new List<int>();
+        var size = 0;
+        GetExtendedTcpTable(IntPtr.Zero, ref size, false, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+        if (size <= 0) return ports;
+        size += 4096; // the table can grow between the two calls
+        var buf = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (GetExtendedTcpTable(buf, ref size, false, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0) != 0) return ports;
+            var count = Marshal.ReadInt32(buf);
+            for (var i = 0; i < count; i++)
+            {
+                // MIB_TCPROW_OWNER_PID: state, localAddr, localPort, remoteAddr, remotePort, owningPid.
+                var row = buf + 4 + i * 24;
+                var addr = (uint)Marshal.ReadInt32(row, 4);
+                var port = (Marshal.ReadByte(row, 8) << 8) | Marshal.ReadByte(row, 9);
+                if (Marshal.ReadInt32(row, 20) == pid && (addr == 0x0100007F || addr == 0)) ports.Add(port);
+            }
+        }
+        finally { Marshal.FreeHGlobal(buf); }
+        return ports;
+    }
 }
 
 /// <summary>Grok Build: the CLI's own session and the billing endpoint behind its /usage panel.</summary>

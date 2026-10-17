@@ -19,6 +19,7 @@ public partial class App : Application
     TaskbarOccupancy? occupancy;
     HoverCard? card;
     DispatcherTimer? hoverDelay;
+    Window? menuOwner;
     readonly SnapshotCache cache = new(System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TokenTray", "last.json"));
 
@@ -211,7 +212,11 @@ public partial class App : Application
         Render();
     }
 
-    void ShowMenu()
+    // Open after the click that asked for the menu has been fully handled, so nothing that
+    // follows it (the tray's own mouse-up, the flyout hiding) takes focus from the menu.
+    void ShowMenu() => Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(OpenMenu));
+
+    void OpenMenu()
     {
         flyout?.HideFlyout();
         var p = new Palette(Palette.UiDark);
@@ -231,9 +236,17 @@ public partial class App : Application
         menu.Items.Add(new Separator { Style = (Style)Resources["TrayMenuSeparator"] });
         Add(S.Quit, Quit);
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        // A menu popup can't take the foreground itself, and while another app has it the menu
+        // loses mouse capture and closes at once. Bring a window of ours forward first.
+        Native.SetForegroundWindow(MenuOwner());
         menu.IsOpen = true;
-        // A popup without an active owner doesn't close on outside clicks; give it focus.
-        if (PresentationSource.FromVisual(menu) is System.Windows.Interop.HwndSource src) Native.SetForegroundWindow(src.Handle);
+    }
+
+    /// <summary>A never-shown window that owns the foreground while the tray menu is open.</summary>
+    IntPtr MenuOwner()
+    {
+        menuOwner ??= new Window { Width = 0, Height = 0, WindowStyle = WindowStyle.None, ShowInTaskbar = false, ShowActivated = false };
+        return new System.Windows.Interop.WindowInteropHelper(menuOwner).EnsureHandle();
     }
 
     void Quit()
@@ -245,6 +258,7 @@ public partial class App : Application
         widget?.Dispose();
         tray?.Dispose();
         flyout?.Close();
+        menuOwner?.Close();
         Shutdown();
     }
 

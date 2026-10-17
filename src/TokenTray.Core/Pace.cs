@@ -15,9 +15,8 @@ public readonly record struct Pace(PaceState State, double ElapsedPercent, DateT
 
         DateTimeOffset? emptyAt = null;
         // A few minutes into a window, one burst would extrapolate wildly; wait for a real trend.
-        if (window.UsedPercent >= 10 && elapsed >= 10 && window.StartsAt is { } start)
+        if (window.UsedPercent >= 10 && window.StartsAt is { } start && now - start is var spent && (elapsed >= 10 || spent >= TimeSpan.FromMinutes(30)))
         {
-            var spent = now - start;
             var ratePerTick = window.UsedPercent / Math.Max(spent.Ticks, 1);
             var at = now + TimeSpan.FromTicks((long)((100 - window.UsedPercent) / ratePerTick));
             if (at < window.ResetsAt) emptyAt = at;
@@ -70,7 +69,7 @@ public readonly record struct Verdict(VerdictKind Kind, UsageWindow? Window, Dat
         {
             // "It'll last" needs a measured pace. Without one (no window length, or too early to tell), just say how full it is.
             var pace = Pace.Of(tight, now);
-            var measured = pace.State != PaceState.Unknown && pace.ElapsedPercent >= 10;
+            var measured = pace.State != PaceState.Unknown && (pace.ElapsedPercent >= 10 || tight.StartsAt is { } s && now - s >= TimeSpan.FromMinutes(30));
             return new(measured ? VerdictKind.Tight : VerdictKind.High, tight, tight.ResetsAt);
         }
 

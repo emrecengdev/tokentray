@@ -2,7 +2,7 @@
 #   TokenTray-<ver>-win-x64.zip / -win-arm64.zip   self-contained, no .NET needed (~70 MB zip)
 #   TokenTray-<ver>-win-x64-small.zip               needs the .NET 10 Desktop Runtime (~6 MB)
 # plus SHA256SUMS.txt.
-param([string]$Version = "1.1.0")
+param([string]$Version = "1.2.0")
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 

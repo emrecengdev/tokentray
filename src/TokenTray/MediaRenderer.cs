@@ -44,6 +44,7 @@ internal static class MediaRenderer
                 new(WindowKind.Weekly, "Weekly", 55, At(74), d7),
                 new(WindowKind.Session, "5-hour", 5, At(4.33), h5, "Claude and GPT"),
                 new(WindowKind.Weekly, "Weekly", 20, At(120), d7, "Claude and GPT"),
+                new(WindowKind.Weekly, "Weekly", 46, At(96), d7, "Argon"),
             ], now, "Google AI Pro", Email: "you@example.com"),
             new(ProviderId.Cursor, SnapshotStatus.Ok,
             [

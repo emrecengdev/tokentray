@@ -179,6 +179,17 @@ public class EarlyWindowTests
         var w = new UsageWindow(WindowKind.Session, "5-hour", 4, now - TimeSpan.FromMinutes(10) + length, length);
         Assert.Null(Pace.Of(w, now).ProjectedEmptyAt);
     }
+
+    [Fact]
+    public void A_weekly_window_burning_fast_hours_in_warns_without_waiting_a_day()
+    {
+        var now = DateTimeOffset.Parse("2026-09-28T12:00:00Z");
+        var length = TimeSpan.FromDays(7);
+        var w = new UsageWindow(WindowKind.Weekly, "Weekly", 19, now - TimeSpan.FromHours(3) + length, length, "Argon");
+        var p = Pace.Of(w, now);
+        Assert.Equal(PaceState.Hot, p.State);
+        Assert.NotNull(p.ProjectedEmptyAt);
+    }
 }
 
 public class CacheTests
