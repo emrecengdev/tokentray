@@ -71,6 +71,7 @@ internal static partial class Native
     [DllImport("user32")] public static extern bool SystemParametersInfo(uint action, uint param, out bool value, uint winIni);
     [DllImport("user32")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("shell32")] public static extern IntPtr SHAppBarMessage(uint msg, ref APPBARDATA data);
 
     [DllImport("gdi32")] public static extern IntPtr CreateCompatibleDC(IntPtr hdc);
