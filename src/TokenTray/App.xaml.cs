@@ -214,6 +214,12 @@ public partial class App : Application
     void ShowMenu()
     {
         flyout?.HideFlyout();
+        var hwnd = tray?.Handle ?? IntPtr.Zero;
+        if (hwnd == IntPtr.Zero && flyout != null)
+            hwnd = new System.Windows.Interop.WindowInteropHelper(flyout).EnsureHandle();
+        if (hwnd != IntPtr.Zero) Native.SetForegroundWindow(hwnd);
+
+        Native.GetCursorPos(out var pt);
         var p = new Palette(Palette.UiDark);
         var menu = new ContextMenu { Style = (Style)Resources["TrayMenu"] };
         menu.Resources["MenuSurface"] = Palette.Brush(p.Surface);
@@ -230,10 +236,11 @@ public partial class App : Application
         Add(S.Settings, () => flyout?.ShowSettingsAt(widget?.ScreenBounds));
         menu.Items.Add(new Separator { Style = (Style)Resources["TrayMenuSeparator"] });
         Add(S.Quit, Quit);
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.AbsolutePoint;
+        menu.HorizontalOffset = pt.X;
+        menu.VerticalOffset = pt.Y;
         menu.IsOpen = true;
-        // A popup without an active owner doesn't close on outside clicks; give it focus.
-        if (PresentationSource.FromVisual(menu) is System.Windows.Interop.HwndSource src) Native.SetForegroundWindow(src.Handle);
+        if (hwnd != IntPtr.Zero) Native.PostMessage(hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
     }
 
     void Quit()

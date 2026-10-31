@@ -18,6 +18,17 @@ internal sealed class TrayIcon : IDisposable
     public event Action? Clicked;
     public event Action? RightClicked;
 
+    public IntPtr Handle
+    {
+        get
+        {
+            var type = typeof(Forms.NotifyIcon);
+            var fi = type.GetField("_window", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                  ?? type.GetField("window", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            return fi?.GetValue(icon) is Forms.NativeWindow nw ? nw.Handle : IntPtr.Zero;
+        }
+    }
+
     public TrayIcon()
     {
         icon = new Forms.NotifyIcon { Text = "TokenTray", Visible = true };
