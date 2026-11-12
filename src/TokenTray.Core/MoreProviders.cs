@@ -126,15 +126,176 @@ public sealed class AntigravityProvider(Func<string?>? readCredential = null) : 
         System.Text.RegularExpressions.Regex.Replace(name, @"\s*models?$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
 }
 
-/// <summary>Grok Build: the CLI's own session and the billing endpoint behind its /usage panel.</summary>
-public sealed class GrokProvider(Func<string?>? authPath = null) : IUsageProvider
+/// <summary>
+/// Grok. A PC may have either source or both, and xAI bills one allowance across its products, so
+/// whichever answers describes the same weekly pool: the Grok Bot desktop app's cached reading (no
+/// sign-in, no request) and the Grok Build CLI's own token (live, the billing endpoint behind its
+/// /usage panel). The cache goes first because it costs nothing; a stale cache defers to the CLI.
+/// </summary>
+public sealed class GrokProvider(Func<string?>? authPath = null, Func<string>? dataDir = null) : IUsageProvider
 {
     const string BillingUrl = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
+    const string SlotKey = "sand.client.slice.client-meta.account-slot";
+    const string UsageSuffix = ".weekly-usage.cache";
+    const string Alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+
     public ProviderId Id => ProviderId.Grok;
     public string? LastAccount { get; private set; }
 
+    public static bool IsInstalled() =>
+        File.Exists(BlobPath(DefaultDataDir(), SlotKey)) || File.Exists(DefaultAuthPath());
+
+    public async Task<ProviderSnapshot> FetchAsync(CancellationToken ct)
+    {
+        LastAccount = null;
+
+        // The app's own file costs nothing and needs no sign-in, so it answers first.
+        var bot = await FetchBot(ct);
+        if (bot is { Status: SnapshotStatus.Ok, Stale: false })
+        {
+            LastAccount = bot.Account;
+            return bot;
+        }
+
+        // A stale cache defers to the CLI, which refreshes its own token while it runs.
+        var cli = await FetchCli(ct);
+        if (cli is { Status: SnapshotStatus.Ok })
+        {
+            LastAccount = cli.Account;
+            return cli;
+        }
+
+        // Neither is live. The app's last numbers beat an error: they are what the app still shows.
+        if (bot is { Windows.Count: > 0 })
+        {
+            LastAccount = bot.Account;
+            return bot;
+        }
+
+        var only = cli ?? bot;
+        if (only is null)
+            return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn,
+                "No Grok sign-in found. Open Grok Bot, or run `grok login`.");
+        LastAccount = only.Account;
+        return only;
+    }
+
+    // ─── Grok Bot desktop app ───
+
+    /// <summary>Grok Bot's Electron userData cache folder.</summary>
+    public static string DefaultDataDir() => Http.Env("GROK_BOT_DATA_DIR") ??
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Grok Bot", "sand-client-persistence");
+
+    /// <summary>The file the app keeps <paramref name="key"/> in: base32 of the key, then .blob.</summary>
+    static string BlobPath(string dir, string key) => Path.Combine(dir, Base32(Encoding.UTF8.GetBytes(key)) + ".blob");
+
+    /// <summary>One account's reading; the app escapes the account id inside the key.</summary>
+    static string UsageKey(string account) => $"sand.client.slice.account.{Uri.EscapeDataString(account)}{UsageSuffix}";
+
+    /// <summary>The app's cached reading; null when Grok Bot has never run on this PC.</summary>
+    async Task<ProviderSnapshot?> FetchBot(CancellationToken ct)
+    {
+        var dir = (dataDir ?? DefaultDataDir)();
+        var slot = BlobPath(dir, SlotKey);
+        if (!File.Exists(slot)) return null;
+
+        string? account;
+        try { account = AccountOf(await Http.ReadShared(slot, ct)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { account = null; }
+        if (account is null)
+            return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn,
+                "Grok Bot hasn't recorded a sign-in yet. Open Grok Bot once and it will.");
+
+        var usage = BlobPath(dir, UsageKey(account));
+        if (!File.Exists(usage))
+            return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn,
+                "Grok Bot has recorded no usage yet. Open Grok Bot once and it will.") with { Account = account };
+
+        string json;
+        try { json = await Http.ReadShared(usage, ct); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return ProviderSnapshot.Failed(Id, SnapshotStatus.Error, "Grok Bot's usage file can't be read.") with { Account = account };
+        }
+        return ParseBotCache(json, DateTimeOffset.Now) with { Account = account };
+    }
+
+    /// <summary>The account id the app puts in every per-account cache key.</summary>
+    public static string? AccountOf(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return Http.Str(doc.RootElement, "value") is { Length: > 0 } a ? a : null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    /// <summary>
+    /// Grok Bot's cached weekly reading. <c>expiresAtMs</c> is the app's own deadline: past it the numbers
+    /// stand but are marked old, because nothing refreshes them while the app is closed.
+    /// </summary>
+    public static ProviderSnapshot ParseBotCache(string json, DateTimeOffset now)
+    {
+        JsonElement root;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            root = doc.RootElement.Clone();
+        }
+        catch (JsonException) { return Bad(SnapshotStatus.Error, "Grok Bot's usage file isn't JSON."); }
+
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Object)
+            return Bad(SnapshotStatus.Error, "Grok Bot's usage file has changed shape.");
+
+        if (Http.Str(value, "kind") is { } kind && kind != "present")
+            return Bad(SnapshotStatus.NotSignedIn, "Grok Bot is signed out.");
+
+        if (!value.TryGetProperty("reading", out var reading) || reading.ValueKind != JsonValueKind.Object
+            || !reading.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
+            return Bad(SnapshotStatus.Error, "Grok Bot has recorded no usage yet.");
+
+        if (Http.Number(usage, "percentUsed") is not { } used)
+            return Bad(SnapshotStatus.Error, "Grok Bot's reading has no usage percentage.");
+
+        var plan = Http.Str(usage, "unifiedPlanName") ?? Http.Str(usage, "grokPlanLabel");
+        var reset = Http.Number(usage, "nextResetMs") is { } r ? Http.Unix(r) : null;
+        var readAt = Http.Number(reading, "readAtMs") is { } a ? Http.Unix(a) : null;
+        var window = new UsageWindow(WindowKind.Weekly, "Weekly", Math.Clamp(used, 0, 100), reset, TimeSpan.FromDays(7));
+
+        if (Http.Number(value, "expiresAtMs") is { } e && Http.Unix(e) is { } expires && expires <= now)
+            return new ProviderSnapshot(ProviderId.Grok, SnapshotStatus.Offline, [window], readAt ?? now, plan,
+                "Grok Bot isn't running, so this reading is out of date.", Stale: true);
+
+        return new ProviderSnapshot(ProviderId.Grok, SnapshotStatus.Ok, [window], readAt ?? now, plan);
+
+        static ProviderSnapshot Bad(SnapshotStatus status, string message) =>
+            ProviderSnapshot.Failed(ProviderId.Grok, status, message);
+    }
+
+    /// <summary>Lowercase RFC 4648 base32 without padding — how Grok Bot names its cache files.</summary>
+    public static string Base32(ReadOnlySpan<byte> data)
+    {
+        var sb = new StringBuilder(data.Length * 8 / 5 + 1);
+        int bits = 0, value = 0;
+        foreach (var b in data)
+        {
+            value = (value << 8) | b;
+            bits += 8;
+            while (bits >= 5)
+            {
+                sb.Append(Alphabet[(value >> (bits - 5)) & 31]);
+                bits -= 5;
+            }
+        }
+        if (bits > 0) sb.Append(Alphabet[(value << (5 - bits)) & 31]);
+        return sb.ToString();
+    }
+
+    // ─── Grok Build CLI ───
+
     public static string DefaultAuthPath() => Path.Combine(Http.Env("GROK_HOME") ?? Path.Combine(Http.Home, ".grok"), "auth.json");
-    public static bool IsInstalled() => File.Exists(DefaultAuthPath());
 
     static readonly Lazy<string> ClientVersion = new(() =>
     {
@@ -169,17 +330,15 @@ public sealed class GrokProvider(Func<string?>? authPath = null) : IUsageProvide
             .FirstOrDefault();
     }
 
-    public async Task<ProviderSnapshot> FetchAsync(CancellationToken ct)
+    /// <summary>The CLI's live reading; null when it is not signed in on this PC.</summary>
+    async Task<ProviderSnapshot?> FetchCli(CancellationToken ct)
     {
         var path = (authPath ?? DefaultAuthPath)();
-        if (path is null || !File.Exists(path))
-            return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn, "No Grok sign-in found. Run `grok login`.");
+        if (path is null || !File.Exists(path)) return null;
 
-        LastAccount = null;
         Session? s;
         try { s = SelectSession(await Http.ReadShared(path, ct)); }
         catch (JsonException) { s = null; }
-        LastAccount = s?.Email;
         if (s is null)
             return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn, "No xAI sign-in in Grok's auth file. Run `grok login`.");
         if (s.ExpiresAt is { } exp && exp <= DateTimeOffset.UtcNow)
