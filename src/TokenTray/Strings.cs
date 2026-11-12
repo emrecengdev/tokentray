@@ -14,7 +14,7 @@ internal static class S
         ProviderId.Claude => "Claude Code",
         ProviderId.Codex => "Codex",
         ProviderId.Antigravity => "Antigravity",
-        ProviderId.Grok => "Grok Build",
+        ProviderId.Grok => "Grok",
         ProviderId.Cursor => "Cursor",
         _ => "OpenCode Go",
     };
@@ -100,7 +100,7 @@ internal static class S
             ProviderId.Claude => "Claude Code girişi bulunamadı. Terminalde `claude` çalıştırıp aboneliğinle giriş yap.",
             ProviderId.Codex => "Codex girişi bulunamadı. Terminalde `codex login` çalıştır.",
             ProviderId.Antigravity => "Antigravity girişi bulunamadı. Antigravity'yi açıp Google hesabınla giriş yap.",
-            ProviderId.Grok => "Grok girişi bulunamadı. Terminalde `grok login` çalıştır.",
+            ProviderId.Grok => "Grok girişi bulunamadı. Grok Bot'u aç ya da `grok login` çalıştır.",
             ProviderId.Cursor => "Cursor girişi bulunamadı. Cursor'ı açıp giriş yap.",
             _ => @"OpenCode Go için %APPDATA%\opencode-go\config.json dosyasında workspaceId ve authCookie gerekli.",
         }),
@@ -109,12 +109,12 @@ internal static class S
             ProviderId.Claude => "Claude oturumunun süresi doldu. Claude Code'u bir kez aç, kendisi yeniler.",
             ProviderId.Codex => "Codex oturumunun süresi doldu. Herhangi bir `codex` komutu çalıştır.",
             ProviderId.Antigravity => "Antigravity oturumunun süresi doldu. Antigravity'yi bir kez aç, kendisi yeniler.",
-            ProviderId.Grok => "Grok oturumunun süresi doldu. Terminalde `grok` komutunu bir kez çalıştır.",
+            ProviderId.Grok => "Grok CLI oturumunun süresi doldu. Terminalde `grok` komutunu bir kez çalıştır.",
             ProviderId.Cursor => "Cursor oturumunun süresi doldu. Cursor'ı bir kez aç.",
             _ => "OpenCode oturum çerezi geçersiz. opencode.ai'den yenisini kopyala.",
         }),
         SnapshotStatus.Error when Tr => "Kullanım okunamadı: " + (s.Message ?? "bilinmeyen yanıt"),
-        SnapshotStatus.Offline => T("Can't reach the usage service. Showing the last reading.", "Kullanım servisine ulaşılamıyor. Son okuma gösteriliyor."),
+        SnapshotStatus.Offline => s.Message ?? T("Can't reach the usage service. Showing the last reading.", "Kullanım servisine ulaşılamıyor. Son okuma gösteriliyor."),
         SnapshotStatus.RateLimited when s.RetryAt is { } at && at > DateTimeOffset.Now =>
             s.Windows.Count > 0
                 ? T($"Showing the last reading. The usage service asked us to slow down; next check in {Format.Duration(at - DateTimeOffset.Now)}.",

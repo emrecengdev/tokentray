@@ -102,9 +102,16 @@ kalanı ve açık, koyu ya da sistem temasını sen seçersin. Ayarlar her seçe
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-claude-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-claude-light.png"><img src="docs/media/tr/mark-claude-dark.png" width="20" alt=""></picture> | **Claude Code** — Pro, Max 5x, Max 20x | 5 saatlik oturum, haftalık, model bazlı haftalık (örn. Opus) | Claude Code CLI ya da Claude masaüstü uygulaması (yalnız aynı hesap) |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-codex-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-codex-light.png"><img src="docs/media/tr/mark-codex-dark.png" width="20" alt=""></picture> | **Codex** — ChatGPT Plus, Pro | Planında varsa 5 saatlik oturum, haftalık | Codex CLI |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-antigravity-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-antigravity-light.png"><img src="docs/media/tr/mark-antigravity-dark.png" width="20" alt=""></picture> | **Google Antigravity** (Gemini) | Gemini modelleri için 5 saatlik ve haftalık, ayrıca Claude ve GPT havuzu | Antigravity |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-grok-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-grok-light.png"><img src="docs/media/tr/mark-grok-dark.png" width="20" alt=""></picture> | **Grok Build** | Haftalık ya da aylık kredi havuzu | Grok CLI |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-grok-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-grok-light.png"><img src="docs/media/tr/mark-grok-dark.png" width="20" alt=""></picture> | **Grok** — Grok Bot planı | Haftalık; xAI'nın ürünlerinde tek kontenjan | Grok Bot uygulaması ya da Grok CLI |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-cursor-light.png"><img src="docs/media/tr/mark-cursor-dark.png" width="20" alt=""></picture> | **Cursor** | Bu fatura ayındaki dahil kullanım, API kullanımı | Cursor |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-opencode-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-opencode-light.png"><img src="docs/media/tr/mark-opencode-dark.png" width="20" alt=""></picture> | **OpenCode Go** | 5 saatlik, haftalık, aylık | Senin verdiğin workspace id ve oturum çerezi |
+
+Grok'un iki kaynağı var ve hangisi cevap verirse o kullanılır. **Grok Bot** masaüstü uygulaması,
+xAI'nın ürünleri arasında paylaşılan haftalık okumayı kendi önbelleğine yazar; giriş de istek de
+gerekmez. **Grok Build** CLI ise kendi oturumunu tutar; TokenTray onu okuyup `/usage` panelinin
+arkasındaki fatura servisine sorar. xAI tüm ürünlerde tek kontenjan fatura ettiği için ikisi de aynı
+havuzu anlatır. Uygulamanın yenilemeyi bıraktığı önbellek CLI'ya devredilir; ikisi de canlı değilse
+uygulamanın son sayıları durur, güncelmiş gibi değil eski olarak işaretlenir.
 
 Bilgisayarında bulunan araçlar kendiliğinden açılır; diğerleri **Ayarlar → Genel**'de tek dokunuş uzağında.
 

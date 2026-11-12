@@ -103,9 +103,16 @@ Settings preview every option with your own numbers before you pick.
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-claude-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-claude-light.png"><img src="docs/media/mark-claude-dark.png" width="20" alt=""></picture> | **Claude Code** — Pro, Max 5x, Max 20x | 5-hour session, weekly, per-model weekly (e.g. Opus) | Claude Code CLI, or the Claude desktop app (same account only) |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-codex-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-codex-light.png"><img src="docs/media/mark-codex-dark.png" width="20" alt=""></picture> | **Codex** — ChatGPT Plus, Pro | 5-hour session where your plan has one, weekly | Codex CLI |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-antigravity-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-antigravity-light.png"><img src="docs/media/mark-antigravity-dark.png" width="20" alt=""></picture> | **Google Antigravity** (Gemini) | 5-hour and weekly for Gemini models, plus the Claude & GPT pool | Antigravity |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-grok-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-grok-light.png"><img src="docs/media/mark-grok-dark.png" width="20" alt=""></picture> | **Grok Build** | Weekly or monthly credit pool | Grok CLI |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-grok-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-grok-light.png"><img src="docs/media/mark-grok-dark.png" width="20" alt=""></picture> | **Grok** — Grok Bot plan | Weekly, one allowance across xAI's products | Grok Bot app, or the Grok CLI |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-cursor-light.png"><img src="docs/media/mark-cursor-dark.png" width="20" alt=""></picture> | **Cursor** | Included usage this billing month, API usage | Cursor |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-opencode-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-opencode-light.png"><img src="docs/media/mark-opencode-dark.png" width="20" alt=""></picture> | **OpenCode Go** | 5-hour, weekly, monthly | A workspace id and session cookie you provide |
+
+Grok has two sources and uses whichever answers. The **Grok Bot** desktop app records the shared
+weekly reading in its own cache, which needs no sign-in and no request; the **Grok Build** CLI keeps
+its own sign-in, which TokenTray reads to ask the billing endpoint behind its `/usage` panel. xAI
+bills one allowance across its products, so both describe the same weekly pool. A cache the app has
+stopped refreshing defers to the CLI; when neither is live, the app's last numbers still stand,
+marked as old rather than passed off as current.
 
 Tools found on your PC switch on by themselves; the rest are one toggle away in **Settings → General**.
 
