@@ -104,7 +104,13 @@ kalanı ve açık, koyu ya da sistem temasını sen seçersin. Ayarlar her seçe
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-antigravity-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-antigravity-light.png"><img src="docs/media/tr/mark-antigravity-dark.png" width="20" alt=""></picture> | **Google Antigravity** (Gemini) | Gemini modelleri için 5 saatlik ve haftalık, ayrıca Claude ve GPT havuzu | Antigravity |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-grok-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-grok-light.png"><img src="docs/media/tr/mark-grok-dark.png" width="20" alt=""></picture> | **Grok Build** | Haftalık ya da aylık kredi havuzu | Grok CLI |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-cursor-light.png"><img src="docs/media/tr/mark-cursor-dark.png" width="20" alt=""></picture> | **Cursor** | Bu fatura ayındaki dahil kullanım, API kullanımı | Cursor |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-opencode-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-opencode-light.png"><img src="docs/media/tr/mark-opencode-dark.png" width="20" alt=""></picture> | **OpenCode Go** | 5 saatlik, haftalık, aylık | Senin verdiğin workspace id ve oturum çerezi |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tr/mark-opencode-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/tr/mark-opencode-light.png"><img src="docs/media/tr/mark-opencode-dark.png" width="20" alt=""></picture> | **OpenCode Go** | 5 saatlik, haftalık, aylık | Senin verdiğin bir API anahtarı ya da workspace id ve oturum çerezi |
+
+OpenCode Go'nun okunacak yerel bir oturum dosyası yok; ona bir kimlik bilgisi vermen gerekiyor.
+opencode.ai'den alınan **API anahtarı** en kolayı ve süresi dolmaz; Ayarlar → Genel'e yapıştır.
+Anahtar yoksa TokenTray `%APPDATA%\opencode-go\config.json` içindeki `workspaceId` ve
+`authCookie` değerlerini okur; bu çerez, tarayıcı oturumu bittiğinde yeniden kopyalanmalıdır.
+Aynı aboneliğin [pi](https://pi.dev) girişinde duran API anahtarı da (`~/.pi/agent/auth.json`) okunur.
 
 Bilgisayarında bulunan araçlar kendiliğinden açılır; diğerleri **Ayarlar → Genel**'de tek dokunuş uzağında.
 

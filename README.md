@@ -105,7 +105,13 @@ Settings preview every option with your own numbers before you pick.
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-antigravity-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-antigravity-light.png"><img src="docs/media/mark-antigravity-dark.png" width="20" alt=""></picture> | **Google Antigravity** (Gemini) | 5-hour and weekly for Gemini models, plus the Claude & GPT pool | Antigravity |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-grok-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-grok-light.png"><img src="docs/media/mark-grok-dark.png" width="20" alt=""></picture> | **Grok Build** | Weekly or monthly credit pool | Grok CLI |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-cursor-light.png"><img src="docs/media/mark-cursor-dark.png" width="20" alt=""></picture> | **Cursor** | Included usage this billing month, API usage | Cursor |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-opencode-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-opencode-light.png"><img src="docs/media/mark-opencode-dark.png" width="20" alt=""></picture> | **OpenCode Go** | 5-hour, weekly, monthly | A workspace id and session cookie you provide |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/mark-opencode-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/media/mark-opencode-light.png"><img src="docs/media/mark-opencode-dark.png" width="20" alt=""></picture> | **OpenCode Go** | 5-hour, weekly, monthly | An API key, or a workspace id and session cookie you provide |
+
+OpenCode Go has no local sign-in file to read, so it needs a credential you give it. An **API key**
+from opencode.ai is the easy one and never expires; paste it in Settings → General. Without one,
+TokenTray reads `%APPDATA%\opencode-go\config.json` for a `workspaceId` and `authCookie`, which
+have to be copied from the browser again whenever that session ends. It also reads the API key a
+[pi](https://pi.dev) sign-in for the same subscription keeps in `~/.pi/agent/auth.json`.
 
 Tools found on your PC switch on by themselves; the rest are one toggle away in **Settings → General**.
 

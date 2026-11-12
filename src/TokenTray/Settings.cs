@@ -19,6 +19,11 @@ public sealed class Settings
     public bool? OpenCode { get; set; }
     /// <summary>Additional Claude Code or Codex sign-ins, each in its own config folder.</summary>
     public List<ExtraAccount> Accounts { get; set; } = [];
+    /// <summary>
+    /// An OpenCode Go API key pasted into Settings. Empty means the key is looked for in the usual
+    /// places instead (environment, config files, a pi sign-in).
+    /// </summary>
+    public string? OpenCodeApiKey { get; set; }
     public bool Welcomed { get; set; }
 
     public bool IsOn(ProviderId id) => id switch
@@ -62,7 +67,7 @@ public sealed class Settings
         if (IsOn(ProviderId.Antigravity)) yield return new AntigravityProvider();
         if (IsOn(ProviderId.Grok)) yield return new GrokProvider();
         if (IsOn(ProviderId.Cursor)) yield return new CursorProvider();
-        if (IsOn(ProviderId.OpenCode)) yield return new OpenCodeProvider();
+        if (IsOn(ProviderId.OpenCode)) yield return new OpenCodeProvider(() => OpenCodeProvider.Resolve(OpenCodeApiKey), OpenCodeApiKey);
         foreach (var a in Accounts)
         {
             var key = $"{a.Provider}:{a.Path}";

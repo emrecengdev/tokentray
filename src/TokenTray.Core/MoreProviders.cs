@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -294,13 +295,55 @@ public sealed class CursorProvider(Func<string?>? readToken = null) : IUsageProv
 }
 
 /// <summary>
-/// OpenCode Go, read from the console with a workspace id and session cookie the user
-/// provides (env vars or %APPDATA%\opencode-go\config.json).
+/// One way to prove who is asking OpenCode Go for a reading. An API key is preferred: it doesn't
+/// expire, while a copied console cookie has to be refreshed by hand whenever the browser forgets it.
 /// </summary>
-public sealed class OpenCodeProvider(Func<(string workspace, string cookie)?>? readCredentials = null) : IUsageProvider
+/// <param name="Account">
+/// Stable id of the reading — the workspace for a cookie, a fingerprint for a key — so a reading is
+/// never shown for a credential that produced it no longer.
+/// </param>
+public sealed record OpenCodeCredentials(string Account, string? ApiKey = null, string? Workspace = null, string? Cookie = null)
+{
+    /// <summary>The key itself, or null when the value can't go in an Authorization header.</summary>
+    public static string? ValidKey(string? key) =>
+        key is { Length: >= 8 } k && !k.Any(char.IsControl) && !k.Any(char.IsWhiteSpace) ? k : null;
+
+    /// <summary>The console's workspace id, or null when it isn't the shape the console hands out.</summary>
+    public static string? ValidWorkspace(string? workspace) =>
+        workspace is { Length: > 0 } w && w.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-') ? w : null;
+
+    /// <summary>A cookie value, or null when it would break the header.</summary>
+    public static string? ValidCookie(string? cookie) =>
+        cookie is { Length: > 0 } c && !c.Any(char.IsControl) ? c : null;
+}
+
+/// <summary>
+/// OpenCode Go. Reads an API key, or the console's workspace id and session cookie, from TokenTray's
+/// own settings, environment variables, or %APPDATA%\opencode-go\config.json. A pi sign-in for the
+/// same subscription is read as well, because pi stores it as a plain API key.
+/// </summary>
+public sealed class OpenCodeProvider : IUsageProvider
 {
     const string StatusUrl = "https://opencode.ai/console/api/go/status";
+    readonly Func<OpenCodeCredentials?> readCredentials;
+    readonly string? fingerprint;
+
+    /// <param name="readCredentials">Re-reads the credential on every poll, so an edited file takes effect.</param>
+    /// <param name="apiKey">
+    /// The key from TokenTray's settings, when there is one. It only keeps this reading apart from a
+    /// previous credential's; the request resolves the credential itself each time.
+    /// </param>
+    public OpenCodeProvider(Func<OpenCodeCredentials?>? readCredentials = null, string? apiKey = null)
+    {
+        this.readCredentials = readCredentials ?? (() => Resolve());
+        fingerprint = OpenCodeCredentials.ValidKey(apiKey) is { } k ? Fingerprint(k) : null;
+    }
+
     public ProviderId Id => ProviderId.OpenCode;
+
+    /// <summary>A different key gets its own cache and poller slot, never the previous key's numbers.</summary>
+    public string Key => fingerprint is null ? Id.ToString() : $"{Id}:{fingerprint}";
+
     public string? LastAccount { get; private set; }
 
     static IEnumerable<string> ConfigPaths()
@@ -311,51 +354,109 @@ public sealed class OpenCodeProvider(Func<(string workspace, string cookie)?>? r
         yield return Path.Combine(Http.Home, ".config", "opencode-quota", "opencode-go.json");
     }
 
-    public static bool IsInstalled() => ReadCredentials() != null;
+    /// <summary>pi keeps the same subscription as an API key; read it, never write to it.</summary>
+    static string PiConfigPath => Path.Combine(Http.Home, ".pi", "agent", "auth.json");
 
-    static (string, string)? ReadCredentials()
+    public static bool IsInstalled() => Resolve() != null;
+
+    /// <summary>
+    /// The credential to use, or null when none is usable. An API key wins over a cookie wherever it
+    /// comes from, so a key added to the settings takes over from a cookie that was already working.
+    /// </summary>
+    /// <param name="configuredApiKey">The key pasted into TokenTray's settings, if any.</param>
+    public static OpenCodeCredentials? Resolve(string? configuredApiKey = null)
     {
-        if (Http.Env("OPENCODE_GO_WORKSPACE_ID") is { } w && Http.Env("OPENCODE_GO_AUTH_COOKIE") is { } c) return Valid(w, c);
-        foreach (var path in ConfigPaths().Where(File.Exists))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
-                var r = doc.RootElement;
-                var ws = Http.Str(r, "workspaceId") ?? Http.Str(r, "workspaceID") ?? Http.Str(r, "workspace_id");
-                var ck = Http.Str(r, "authCookie") ?? Http.Str(r, "cookie") ?? Http.Str(r, "auth_cookie");
-                if (ws != null && ck != null && Valid(ws, ck) is { } ok) return ok;
-            }
-            catch (Exception ex) when (ex is JsonException or IOException) { }
-        }
-        return null;
+        var found = new List<OpenCodeCredentials>();
+        Add(FromKey(configuredApiKey));
+        Add(FromKey(Http.Env("OPENCODE_GO_API_KEY")));
+        Add(FromCookie(Http.Env("OPENCODE_GO_WORKSPACE_ID"), Http.Env("OPENCODE_GO_AUTH_COOKIE")));
+        foreach (var path in ConfigPaths().Where(File.Exists).ToList()) Add(FromConfigFile(path));
+        Add(FromPi(PiConfigPath));
+        return found.FirstOrDefault(c => c.ApiKey is not null) ?? found.FirstOrDefault();
+
+        void Add(OpenCodeCredentials? c) { if (c is not null) found.Add(c); }
     }
 
-    static (string, string)? Valid(string workspace, string cookie) =>
-        workspace.Length > 0 && workspace.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-') &&
-        cookie.Length > 0 && !cookie.Contains('\r') && !cookie.Contains('\n') ? (workspace, cookie) : null;
+    static OpenCodeCredentials? FromKey(string? key) =>
+        OpenCodeCredentials.ValidKey(key) is { } k ? new(Fingerprint(k), ApiKey: k) : null;
+
+    static OpenCodeCredentials? FromCookie(string? workspace, string? cookie) =>
+        OpenCodeCredentials.ValidWorkspace(workspace) is { } w && OpenCodeCredentials.ValidCookie(cookie) is { } c
+            ? new(w, Workspace: w, Cookie: c)
+            : null;
+
+    static OpenCodeCredentials? FromConfigFile(string path)
+    {
+        try { return FromConfigJson(File.ReadAllText(path)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>One config file's text: an API key, or a console workspace id and session cookie.</summary>
+    public static OpenCodeCredentials? FromConfigJson(string json)
+    {
+        JsonElement r;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            r = doc.RootElement.Clone();
+        }
+        catch (JsonException) { return null; }
+        if (r.ValueKind != JsonValueKind.Object) return null;
+        if (FromKey(Http.Str(r, "apiKey") ?? Http.Str(r, "api_key") ?? Http.Str(r, "key")) is { } key) return key;
+        return FromCookie(
+            Http.Str(r, "workspaceId") ?? Http.Str(r, "workspaceID") ?? Http.Str(r, "workspace_id"),
+            Http.Str(r, "authCookie") ?? Http.Str(r, "cookie") ?? Http.Str(r, "auth_cookie"));
+    }
+
+    /// <summary>pi's auth.json: {"opencode-go":{"type":"api_key","key":"oc_sk_…"}}.</summary>
+    static OpenCodeCredentials? FromPi(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("opencode-go", out var e)
+                && e.ValueKind == JsonValueKind.Object
+                    ? FromKey(Http.Str(e, "key"))
+                    : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>Short and stable; the key itself never reaches a cache file or a log line.</summary>
+    static string Fingerprint(string apiKey) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apiKey)))[..8].ToLowerInvariant();
 
     public async Task<ProviderSnapshot> FetchAsync(CancellationToken ct)
     {
-        var creds = (readCredentials ?? (() => ReadCredentials()))();
-        LastAccount = creds?.workspace;
-        if (creds is not var (workspace, cookie))
+        var creds = readCredentials();
+        LastAccount = creds?.Account;
+        if (creds is null)
             return ProviderSnapshot.Failed(Id, SnapshotStatus.NotSignedIn,
-                "OpenCode Go needs a workspace id and session cookie in %APPDATA%\\opencode-go\\config.json.");
+                "OpenCode Go needs an API key, or a workspace id and session cookie, in %APPDATA%\\opencode-go\\config.json.");
 
-        var header = cookie.Split(';').Any(p => p.TrimStart().StartsWith("auth=") || p.TrimStart().StartsWith("__Host-console_session="))
-            ? cookie : $"auth={cookie}";
         using var req = new HttpRequestMessage(HttpMethod.Get, StatusUrl);
         req.Headers.Accept.ParseAdd("application/json");
-        req.Headers.Add("x-org-id", workspace);
-        req.Headers.Add("Cookie", header);
         req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36");
+        var byKey = creds.ApiKey is not null;
+        if (creds.ApiKey is { } apiKey)
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
+        else
+        {
+            req.Headers.Add("x-org-id", creds.Workspace);
+            req.Headers.Add("Cookie", creds.Cookie!.Split(';').Any(p => p.TrimStart().StartsWith("auth=") || p.TrimStart().StartsWith("__Host-console_session="))
+                ? creds.Cookie : $"auth={creds.Cookie}");
+        }
+
         var (outcome, status, body) = await Http.Send(req, ct);
         if (outcome == Http.Outcome.Auth)
-            return ProviderSnapshot.Failed(Id, SnapshotStatus.TokenExpired, "OpenCode rejected the session cookie. Copy a fresh one from opencode.ai.") with { Account = workspace };
+            return ProviderSnapshot.Failed(Id, SnapshotStatus.TokenExpired, byKey
+                ? "OpenCode rejected the API key. Check it at opencode.ai, then paste a new one in Settings."
+                : "OpenCode rejected the session cookie. Copy a fresh one from opencode.ai.") with { Account = creds.Account };
         if (outcome == Http.Outcome.Failed)
-            return ProviderSnapshot.Failed(Id, SnapshotStatus.Error, $"OpenCode returned {status}.") with { Account = workspace };
-        return Parse(body, DateTimeOffset.Now) with { Account = workspace };
+            return ProviderSnapshot.Failed(Id, SnapshotStatus.Error, $"OpenCode returned {status}.") with { Account = creds.Account };
+        return Parse(body, DateTimeOffset.Now) with { Account = creds.Account };
     }
 
     public static ProviderSnapshot Parse(string json, DateTimeOffset now)

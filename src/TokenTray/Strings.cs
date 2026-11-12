@@ -193,6 +193,10 @@ internal static class S
     public static string FoundHere => T("Found on this PC", "Bu bilgisayarda bulundu");
     public static string NotFoundHere => T("Not found on this PC", "Bu bilgisayarda bulunamadı");
     public static string AccountsLabel => T("More accounts", "Ek hesaplar");
+    public static string OpenCodeKeyLabel => T("OpenCode Go API key", "OpenCode Go API anahtarı");
+    public static string OpenCodeKeyHint => T("From opencode.ai. Unlike the console cookie it doesn't expire. Leave it empty to use a config.json cookie instead.",
+        "opencode.ai'den alınır. Konsol çerezinden farklı olarak süresi dolmaz. Bunun yerine config.json çerezi kullanmak için boş bırak.");
+    public static string OpenCodeKeyPlaceholder => "oc_sk_…";
     public static string AccountsHint => T("Signed in to Claude Code or Codex in another config folder (CLAUDE_CONFIG_DIR, CODEX_HOME)? Add that folder.",
         "Claude Code ya da Codex'e başka bir ayar klasöründe (CLAUDE_CONFIG_DIR, CODEX_HOME) giriş yaptıysan o klasörü ekle.");
     public static string AddAccount(ProviderId id) => T($"Add {ShortName(id)} account", $"{ShortName(id)} hesabı ekle");

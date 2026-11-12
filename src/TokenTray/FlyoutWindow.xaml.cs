@@ -493,6 +493,17 @@ internal partial class FlyoutWindow : Window
             Page.Children.Add(Switch(S.Name(id), found ? S.FoundHere : S.NotFoundHere, settings.IsOn(id), v => settings.Set(id, v)));
         }
 
+        // OpenCode Go authenticates a request rather than storing a sign-in, so it needs a field.
+        Page.Children.Add(new TextBlock { Text = S.OpenCodeKeyLabel, Margin = new Thickness(0, 12, 0, 2) });
+        Page.Children.Add(new TextBlock { Text = S.OpenCodeKeyHint, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Palette.Brush(palette.TextMuted), Margin = new Thickness(0, 0, 0, 6) });
+        Page.Children.Add(SecretField(settings.OpenCodeApiKey ?? "", S.OpenCodeKeyPlaceholder, text =>
+        {
+            var key = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+            if (key == settings.OpenCodeApiKey) return;
+            settings.OpenCodeApiKey = key;
+            settingsChanged();
+        }));
+
         // Extra sign-ins in other config folders
         Page.Children.Add(new TextBlock { Text = S.AccountsLabel, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 2) });
         Page.Children.Add(new TextBlock { Text = S.AccountsHint, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Palette.Brush(palette.TextMuted), Margin = new Thickness(0, 0, 0, 6) });
@@ -577,6 +588,56 @@ internal partial class FlyoutWindow : Window
         settings.Accounts.Add(new ExtraAccount(id, path, folder.Length > 0 ? folder : S.ShortName(id)));
         settingsChanged();
         ShowSettings();
+    }
+
+    /// <summary>
+    /// A credential field. It commits on Enter or when it loses focus, never per keystroke: a commit
+    /// saves the settings and restarts the poller for that source.
+    /// </summary>
+    FrameworkElement SecretField(string value, string placeholder, Action<string> commit)
+    {
+        var box = new TextBox
+        {
+            Text = value,
+            Padding = new Thickness(8, 6, 8, 6),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = Palette.Brush(palette.Text),
+            CaretBrush = Palette.Brush(palette.Text),
+            FontFamily = new FontFamily("Consolas, Cascadia Mono, Segoe UI"),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        AutomationProperties.SetName(box, placeholder);
+        // WPF's TextBox has no placeholder, so the hint sits under the (transparent) field.
+        var hint = new TextBlock
+        {
+            Text = placeholder,
+            FontSize = 12,
+            IsHitTestVisible = false,
+            Foreground = Palette.Brush(palette.TextMuted),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(9, 0, 0, 0),
+            Visibility = value.Length == 0 ? Visibility.Visible : Visibility.Collapsed,
+        };
+        box.TextChanged += (_, _) => hint.Visibility = box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            commit(box.Text);
+            Keyboard.ClearFocus();
+        };
+        // Leaving the field, closing the flyout and switching tabs all drop focus, so nothing typed is lost.
+        box.LostFocus += (_, _) => commit(box.Text);
+        var stack = new Grid();
+        stack.Children.Add(box);
+        stack.Children.Add(hint);
+        return new Border
+        {
+            Background = Palette.Brush(palette.Track),
+            CornerRadius = new CornerRadius(6),
+            Margin = new Thickness(0, 0, 0, 4),
+            Child = stack,
+        };
     }
 
     FrameworkElement Switch(string label, string? hint, bool value, Action<bool> set, bool persist = true)
