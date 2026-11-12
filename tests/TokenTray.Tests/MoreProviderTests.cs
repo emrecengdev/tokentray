@@ -110,6 +110,56 @@ public class MoreProviderTests
     }
 
     [Fact]
+    public void OpenCode_config_accepts_an_api_key_or_the_console_pair()
+    {
+        var key = OpenCodeProvider.FromConfigJson("""{"apiKey":"oc_sk_0123456789"}""")!;
+        Assert.Equal("oc_sk_0123456789", key.ApiKey);
+        Assert.NotNull(key.Account);
+
+        var cookie = OpenCodeProvider.FromConfigJson("""{"workspaceId":"wrk_abc-1","authCookie":"auth=eyJ"}""")!;
+        Assert.Equal("wrk_abc-1", cookie.Workspace);
+        Assert.Equal("auth=eyJ", cookie.Cookie);
+        Assert.Equal("wrk_abc-1", cookie.Account);
+    }
+
+    [Fact]
+    public void OpenCode_prefers_an_api_key_over_a_cookie_in_the_same_file()
+    {
+        var c = OpenCodeProvider.FromConfigJson("""{"apiKey":"oc_sk_0123456789","workspaceId":"wrk_abc","authCookie":"auth=eyJ"}""")!;
+        Assert.Equal("oc_sk_0123456789", c.ApiKey);
+        Assert.Null(c.Cookie);
+    }
+
+    [Fact]
+    public void OpenCode_rejects_a_credential_that_would_break_a_header()
+    {
+        Assert.Null(OpenCodeProvider.FromConfigJson("""{"workspaceId":"wrk bad","authCookie":"x"}"""));
+        Assert.Null(OpenCodeProvider.FromConfigJson("""{"workspaceId":"wrk_ok","authCookie":"a\r\nCookie: evil"}"""));
+        Assert.Null(OpenCodeProvider.FromConfigJson("""{"apiKey":"oc sk"}"""));
+        Assert.Null(OpenCodeProvider.FromConfigJson("""{"workspaceId":"wrk_ok"}"""));
+        Assert.Null(OpenCodeProvider.FromConfigJson("not json"));
+        Assert.Null(OpenCodeProvider.FromConfigJson("[]"));
+    }
+
+    [Fact]
+    public void OpenCode_key_gets_a_stable_id_that_never_shows_the_key()
+    {
+        var a = new OpenCodeProvider(() => null, "oc_sk_0123456789");
+        var same = new OpenCodeProvider(() => null, "oc_sk_0123456789");
+        var other = new OpenCodeProvider(() => null, "oc_sk_9876543210");
+        Assert.Equal(a.Key, same.Key);
+        Assert.NotEqual(a.Key, other.Key);
+        Assert.DoesNotContain("oc_sk_", a.Key);
+        Assert.Equal("OpenCode", new OpenCodeProvider(() => null).Key);
+    }
+
+    [Fact]
+    public void OpenCode_key_from_settings_wins_over_everything_else()
+    {
+        Assert.Equal("oc_sk_0123456789", OpenCodeProvider.Resolve("oc_sk_0123456789")!.ApiKey);
+    }
+
+    [Fact]
     public void Jwt_claims_decode_without_padding() =>
         Assert.Equal("auth0|user_123", Jwt.Claim("h.eyJzdWIiOiJhdXRoMHx1c2VyXzEyMyJ9.s", "sub"));
 
